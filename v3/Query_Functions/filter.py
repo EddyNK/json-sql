@@ -98,7 +98,7 @@ class Filter:
     def filter(self, query):
         "Process a queries filter statement"
         filter_set_results = []
-        for filter_set in query["filter"]["filter_sets"]:
+        for filter_set in query["filter"]["conditionals"]:
             filter_set_results.extend([self.__process_filter_set(filter_set)])
 
         self.__filter_rows_by_conjunctives(

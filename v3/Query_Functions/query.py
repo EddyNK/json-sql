@@ -1,89 +1,81 @@
 '''
-Manages the processing of an sql like "where" statement
+Manages Query execution by composing Table class methods
+To change or modify query order of operations or high level operation
+you are in the correct file.
 '''
-from Query_Functions.classifier import classify
-from Main import main
 from v3.Data_Definition.table import Table
-from Query_Functions.filter import Filter
+from v3.Query_Functions.classifier import classify
+from v3.Query_Functions.aggregator import aggregate
+from v3.Query_Functions.operations import row_arithmatic
+from v3.Query_Functions.classifier import classify
 
-caffeine_meta = {
-    "table name": "Caffeine.csv", 
-    "primary key": -1,
-    "column types": {
-        "drink": "string",
-        "Volume (ml)": "float",
-        "Calories": "int",
-        "Caffeine (mg)": "int",
-        "type": "string"
-    }
-}
+def query(table :Table, Query):
+        '''
+        Takes a query object and executes the proper funtion 
+        in the proper order to acheive it
+        '''
+        # [FILTER]
+        filtered_row_keys = table.filter(Query)
+        resulting_map = []
+        for row in filtered_row_keys:
+            resulting_map.append(table.table_map.get_key_mapping(row))
 
-# (s1 and s2) and (s3 and s4)
+        # [GROUP BY]
+        grouping_res = []
+        group_by_columns = Query["classify"]
+        groups = classify(group_by_columns, resulting_map)
+        
+        ''' 
+            This is an extra step needed for the original implementation
+            of TABLE class. This step converts each rows mapping [0,1,...]
+            into the true values ["string","float",...]
+        '''
+        for group in groups:
+            resolved_group = [table.resolve_mapping(value) for value in groups[group]]
+            grouping_res.append(resolved_group) 
+        
+        ' Arithmatic operations intended to be applied nested arrays (groups) '
+        
+        # Group by: Arithmatic operation
+        operation = Query["mutate"]["arithmatic1"]
+        if len(operation) > 0:
+            for group in grouping_res:
+                for index,row_val in enumerate(group):
+                    # Process arithmatic on each value
+                    group[index] = row_arithmatic(row_val, operation)
 
-statement1 = {
-        "column": "type",
-        "operation": "==",
-        "target": "Coffee"
-    }
-
-statement2 = {
-        "column": "Calories",
-        "operation": "==",
-        "target": 0
-    }
-
-filter_set1 = {
-    "conjunctives": [],
-    "statements": [statement1],  
-}
-
-statement3 = {
-        "column": "drink",
-        "operation": "==",
-        "target": "Costa Coffee"
-    }
-
-statement4 = {
-        "column": "drink",
-        "operation": "==",
-        "target": "Hell Energy Coffee"
-    }
-
-filter_set2 = {
-    "conjunctives": ["or"],
-    "statements": [statement3, statement4],  
-}
-
-test_query = { 
-    "filter":{
-        "conjunctives": [],
-        "filter_sets": [filter_set1]
-    },
-    "group by":[3]
-}
-
-def query(table: Table, Query):
-    '''
-    Takes a query object and executes order of operation to acheive it
-    '''
-    # [FILTER]
-    table = main("./Data/caffeine.csv", caffeine_meta)
-    filterObject = Filter(table)
-    resulting_row_id = filterObject.filter(Query)
-    resulting_map = []
-    for row in resulting_row_id:
-        if(row == 0):
-            continue
-        resulting_map.append(table.table_map.get_key_mapping(row))
-    # print(resulting_map)
-    # [GROUP BY]
-    group_by_columns = test_query["group by"]
-    groups = classify(group_by_columns, resulting_map)
-    # print(groups)
-    for group in groups:
-        print("----------")
-        print(group)
-        for value in groups[group]:
-            print(table.convert_map_to_value(value))
-            
-query(None, test_query)
+        # Group by: Aggregate functions
+        operation = Query["mutate"]["aggregate1"]
+        if len(operation) > 0:
+            for index, group in enumerate(grouping_res):
+                grouping_res[index] = aggregate(group, operation)
+        
+        ' Round 2 of arithmatic operations on the table as a whole '
+        
+        # Merge groups into 1 [[unified group]]
+        # after group by arithmatic and aggregate operations have been completed
+        unioned_table = [row for groups in grouping_res for row in groups]
+        
+        # Arithmatic operation
+        operation = Query["mutate"]["arithmatic2"]
+        if len(operation) > 0:
+            for index, row_val in enumerate(unioned_table):
+                unioned_table[index] = row_arithmatic(row_val, operation)
+        
+        # Aggregate functions
+        operation = Query["mutate"]["aggregate2"]
+        if len(operation) > 0:
+            unioned_table = aggregate(unioned_table, operation)
+        
+        
+        # [SORT]
+        sort_column = Query["sort"]["column"]
+        sort_direction = Query["sort"]["direction"]
+        if sort_direction == -1:
+            unioned_table = sorted(unioned_table, key=lambda row: row[sort_column], reverse=True)
+        else:
+            unioned_table = sorted(unioned_table, key=lambda row: row[sort_column])
+        
+        
+        batch_size = Query["select"]
+        return [resulting_row for index,resulting_row in enumerate(unioned_table) if index < batch_size]

@@ -26,7 +26,8 @@ class TestFilter(unittest.TestCase):
         
     def test_and_or_mix(self):
         '''
-        NOTE: the or statment must comes first in operation precedence
+        NOTE: the OR statment must comes first in operation precedence
+        as we want to delay the removal of possible results till the end.
         '''
         reducer = Filter(None,None)
         conjunctive = ["and", "or"]

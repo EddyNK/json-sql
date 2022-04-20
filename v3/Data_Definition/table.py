@@ -1,10 +1,9 @@
 import json
 import csv
+from math import *
 from typing import OrderedDict
 
 from Query_Definition.statement import Statement
-
-from ..Query_Functions.classifier import classify
 from .table_meta import TableMetaData
 from ..Helpers.converters import convert_string
 
@@ -227,7 +226,6 @@ class Table:
     Table
     Manages interactions with a table
     '''
-
     def __init__(self) -> None:
         pass
 
@@ -249,13 +247,13 @@ class Table:
 
     def __filter_rows_by_statements(self, filter_set: Statement):
         '''
-        Filter each map index value based off of Statement
-        object.
+        Filter each table by statement 
+        results in array of passing row indexes
         '''
         passed_keys = []
         # Filter each column based off of statement object specification
         for index, statement in enumerate(filter_set["statements"]):
-            # Find ....
+            # Operates on table column values 
             statement = Statement(statement)
             column_value_list = self.table_values.get_column_values(
                 statement.column)
@@ -263,25 +261,25 @@ class Table:
                 statement.column)
             approved_column_value_indexes = set(
                 statement.exec("int", column_value_list))
-
             keys_with_columns_that_passed = []
             # Ensure that a given key map has values that pass the filtration statement
             for index, key in enumerate(self.table_map.get_key_list()):
                 key_value_map = self.table_map.get_key_mapping(key)
-
                 if key_value_map[target_column_index] in approved_column_value_indexes:
-                    keys_with_columns_that_passed.append(index)
+                    keys_with_columns_that_passed.append(key)
             passed_keys.append(keys_with_columns_that_passed)
         return passed_keys
 
-    def __filter_rows_by_conjunctives(self, conjunctive_list, list_to_proces):
+    @staticmethod
+    def __filter_rows_by_conjunctives(conjunctive_list, list_to_proces):
         ''' 
         ---- Process Conjunctives ----
-        Takes each matching row index and creates new lists based off of 
-        conjuctive operation.
+        Given a list containing groups of numbers this function
+        will create a new lists based off of specified "and", "or"
+        conjuction operations.
         # Precendence:
         # 1. 'OR' = (arr1 + arr2)
-        # 2. 'AND' = (arr1 - arr2 ) remove unique values 
+        # 2. 'AND' = (arr1 - arr2 )
         # TODO: IDK if we should do NOT
         # 3. Process 'NOT'
         '''
@@ -335,10 +333,11 @@ class Table:
 
     def filter(self, query):
         '''
-        Process a queries filter statement
+        Performs filter and conjunctive operation on each row and returns the indexes of
+        rows that pass these statements
         '''
         filter_set_results = []
-        for filter_set in query["filter"]["filter_sets"]:
+        for filter_set in query["filter"]["conditionals"]:
             filter_set_results.extend([self.__process_filter_set(filter_set)])
 
         self.__filter_rows_by_conjunctives(
@@ -356,38 +355,6 @@ class Table:
             value = self.table_values.get_column_values(column)[value_index]
             converted_map.append(value)
         return converted_map
-
-    def query(self, Query):
-        '''
-        Takes a query object and executes the proper funtion 
-        in the proper order to acheive it
-        '''
-        # [FILTER]
-        resulting_row_id = self.filter(Query)
-        resulting_map = []
-        for row in resulting_row_id:
-            if(row == 0):
-                continue
-            resulting_map.append(self.table_map.get_key_mapping(row))
-        # print(resulting_map)
-        # What happens frist?? column mathematics or grouping and sorting??
-        # [GROUP BY]
-        group_by_columns = Query["group by"]
-        groups = classify(group_by_columns, resulting_map)
-        # [SORT]
-        ans = []
-        for group in sorted(groups): #TODO: Sort group result by??
-            print("----------")
-            print(group)
-            groups[group] = sorted(groups[group], key=lambda i: i[0]) #TODO: Sort group members
-            for value in groups[group]:
-                print(self.resolve_mapping(value))
-                ans.append(self.resolve_mapping(value))
-        # Sort by
-        # for entry in ans:
-        #     for val in entry:
-        #         print("{}  ".format(val),end='|  ')
-        #     print("\n")
         
         
         
